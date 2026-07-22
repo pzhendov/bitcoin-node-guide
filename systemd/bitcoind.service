@@ -1,0 +1,20 @@
+[Unit]
+Description=Bitcoin Core daemon
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=ubuntu
+Group=ubuntu
+ExecStart=/usr/local/bin/bitcoind -datadir=/home/ubuntu/.bitcoin
+ExecStop=/usr/local/bin/bitcoin-cli -datadir=/home/ubuntu/.bitcoin stop
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=600
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

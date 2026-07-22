@@ -1,0 +1,38 @@
+# Live Bitcoin Core configuration and authentication
+bitcoin.conf
+.cookie
+.cookie.*
+
+# Wallets and private data
+wallets/
+wallet.dat*
+*.wallet
+
+# Blockchain and node state
+blocks/
+chainstate/
+indexes/
+debug.log
+*.log
+peers.dat
+anchors.dat
+banlist.json
+mempool.dat
+fee_estimates.dat
+settings.json
+
+# Downloaded releases and verification repositories
+bitcoin-download/
+bitcoin-*-linux-gnu.tar.gz
+SHA256SUMS
+SHA256SUMS.asc
+guix.sigs/
+
+# Virtual machine images and installers
+*.qcow2
+*.img
+*.iso
+
+# Local operating-system and editor files
+.DS_Store
+.vscode/

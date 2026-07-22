@@ -1,0 +1,29 @@
+# Bitcoin Core 31.1 example configuration
+# Pruned, headless mainnet node for a 6 GiB RAM VM.
+#
+# Install with:
+#   mkdir -p ~/.bitcoin
+#   cp config/bitcoin.conf.example ~/.bitcoin/bitcoin.conf
+#   chmod 600 ~/.bitcoin/bitcoin.conf
+#
+# Do not add RPC passwords, wallet seeds, or private keys to this file.
+
+# Storage and synchronization
+# Target 50,000 MiB of raw block and undo data.
+prune=50000
+
+# Use up to 2 GiB of memory for database caching during synchronization.
+dbcache=2048
+
+# Security
+# This node validates Bitcoin but does not store wallet private keys.
+disablewallet=1
+
+# Enable local bitcoin-cli access using cookie authentication.
+server=1
+
+# Network limits
+maxconnections=40
+
+# Historical-block upload target in MiB per 24 hours.
+maxuploadtarget=5000
