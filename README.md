@@ -1390,6 +1390,18 @@ caffeinate -i
 
 Keep the Mac connected to power and its lid open. Stop `caffeinate` with `Control + C`.
 
+---
+
+# Disaster recovery
+
+The project includes a tested disaster-recovery runbook for rebuilding the node in a fresh Multipass VM from a tagged repository release.
+
+The procedure covers Bitcoin Core checksum and signature verification, configuration restoration, systemd services, Chrony, health monitoring, secret handling, restart validation and full synchronization requirements.
+
+See [docs/disaster-recovery.md](docs/disaster-recovery.md) for the complete recovery procedure, limitations, checklist and Multipass troubleshooting evidence.
+
+---
+
 # Automated health monitoring
 
 The project includes an automated Bitcoin node health monitor.
@@ -1448,6 +1460,7 @@ bitcoin-node-guide/
 ├── docs/
 │   ├── README.md
 │   ├── alerting.md
+│   ├── disaster-recovery.md
 │   └── monitoring.md
 ├── launchd/
 │   └── com.pzhendov.bitcoin-node-health-notify.plist
