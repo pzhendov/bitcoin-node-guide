@@ -1414,6 +1414,26 @@ See [docs/monitoring.md](docs/monitoring.md) for installation, thresholds, exit 
 
 ---
 
+# Telegram and macOS alerts
+
+The node monitor supports state-change notifications through Telegram and macOS Notification Center.
+
+Alerts are sent when the node changes between:
+
+- `HEALTHY`
+- `WARNING`
+- `CRITICAL`
+
+Repeated checks in the same state do not produce duplicate notifications. A recovery notification is sent when an unhealthy node returns to `HEALTHY`.
+
+Telegram credentials are stored only inside the VM in a root-protected file. Tokens and chat IDs must never be committed to Git.
+
+The macOS LaunchAgent checks the Multipass node every five minutes and displays local notifications. The Telegram dispatcher runs with the systemd health monitor inside the VM.
+
+See [docs/alerting.md](docs/alerting.md) for architecture, installation, testing, security and troubleshooting.
+
+---
+
 # Repository structure
 
 ```text
@@ -1425,9 +1445,15 @@ bitcoin-node-guide/
 │   └── bitcoin.conf.example
 ├── docs/
 │   ├── README.md
+│   ├── alerting.md
 │   └── monitoring.md
+├── launchd/
+│   └── com.pzhendov.bitcoin-node-health-notify.plist
 ├── scripts/
-│   └── bitcoin-node-health.sh
+│   ├── bitcoin-node-health-runner.sh
+│   ├── bitcoin-node-health.sh
+│   ├── bitcoin-node-telegram-alert.sh
+│   └── macos-bitcoin-node-notify.sh
 └── systemd/
     ├── bitcoind.service
     ├── bitcoin-node-health.service

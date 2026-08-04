@@ -1,5 +1,5 @@
 [Unit]
-Description=Bitcoin Core node health check
+Description=Bitcoin Core node health check and alert dispatcher
 Wants=network-online.target
 After=network-online.target chrony.service bitcoind.service
 
@@ -7,7 +7,15 @@ After=network-online.target chrony.service bitcoind.service
 Type=oneshot
 User=ubuntu
 Group=ubuntu
-ExecStart=/usr/local/bin/bitcoin-node-health
+
+EnvironmentFile=-/etc/bitcoin-node-health/telegram.env
+
+RuntimeDirectory=bitcoin-node-health
+RuntimeDirectoryMode=0700
+StateDirectory=bitcoin-node-health
+StateDirectoryMode=0700
+
+ExecStart=/usr/local/bin/bitcoin-node-health-runner
 SuccessExitStatus=1
 UMask=0077
 

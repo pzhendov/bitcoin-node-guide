@@ -36,3 +36,7 @@ guix.sigs/
 # Local operating-system and editor files
 .DS_Store
 .vscode/
+
+# Alert credentials
+*.env
+telegram.env
