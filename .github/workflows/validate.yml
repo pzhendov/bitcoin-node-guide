@@ -1,0 +1,165 @@
+name: Validate repository
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-validation:
+    name: Bash, systemd, and security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validate Bash syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for script in scripts/*.sh; do
+            echo "Checking Bash syntax: ${script}"
+            bash -n "${script}"
+          done
+
+      - name: Install ShellCheck when needed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes shellcheck
+          fi
+
+          shellcheck --version
+
+      - name: Run ShellCheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          shellcheck scripts/*.sh
+
+      - name: Validate systemd units
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! id ubuntu >/dev/null 2>&1; then
+            sudo useradd \
+              --system \
+              --create-home \
+              --shell /usr/sbin/nologin \
+              ubuntu
+          fi
+
+          sudo install -o root -g root -m 0755 \
+            scripts/bitcoin-node-health.sh \
+            /usr/local/bin/bitcoin-node-health
+
+          sudo install -o root -g root -m 0755 \
+            scripts/bitcoin-node-health-runner.sh \
+            /usr/local/bin/bitcoin-node-health-runner
+
+          sudo install -o root -g root -m 0755 \
+            scripts/bitcoin-node-telegram-alert.sh \
+            /usr/local/bin/bitcoin-node-telegram-alert
+
+          sudo systemd-analyze verify \
+            systemd/bitcoin-node-health.service \
+            systemd/bitcoin-node-health.timer
+
+      - name: Reject credential files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          secret_files="$(
+            find . \
+              -path './.git' -prune -o \
+              -type f \
+              \( -name '*.env' -o -name 'telegram.env' \) \
+              -print
+          )"
+
+          if [[ -n "${secret_files}" ]]; then
+            echo "Credential files must not be committed:"
+            printf '%s\n' "${secret_files}"
+            exit 1
+          fi
+
+      - name: Scan for Telegram bot tokens
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if grep \
+            --recursive \
+            --line-number \
+            --extended-regexp \
+            --exclude-dir=.git \
+            '[0-9]{6,12}:[A-Za-z0-9_-]{30,}' \
+            .
+          then
+            echo "Possible Telegram bot token detected."
+            exit 1
+          fi
+
+      - name: Reject trailing whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git grep \
+            --line-number \
+            --extended-regexp \
+            '[[:blank:]]+$' \
+            -- \
+            '*.md' \
+            '*.sh' \
+            '*.service' \
+            '*.timer' \
+            '*.plist' \
+            '*.yml'
+          then
+            echo "Trailing whitespace detected."
+            exit 1
+          fi
+
+  macos-validation:
+    name: macOS LaunchAgent
+    runs-on: macos-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validate macOS script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/macos-bitcoin-node-notify.sh
+
+      - name: Validate LaunchAgent plist
+        shell: bash
+        run: |
+          set -euo pipefail
+          plutil -lint \
+            launchd/com.pzhendov.bitcoin-node-health-notify.plist
