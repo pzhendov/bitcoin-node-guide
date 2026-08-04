@@ -1,5 +1,7 @@
 # Bitcoin Node Guide
 
+[![Validate repository](https://github.com/pzhendov/bitcoin-node-guide/actions/workflows/validate.yml/badge.svg)](https://github.com/pzhendov/bitcoin-node-guide/actions/workflows/validate.yml)
+
 A reproducible, beginner-friendly guide for running a pruned Bitcoin Core node inside an Ubuntu Multipass virtual machine on an Apple Silicon Mac.
 
 ## Tested environment
