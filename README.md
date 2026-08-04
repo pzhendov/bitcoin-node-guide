@@ -1388,17 +1388,50 @@ caffeinate -i
 
 Keep the Mac connected to power and its lid open. Stop `caffeinate` with `Control + C`.
 
+# Automated health monitoring
+
+The project includes an automated Bitcoin node health monitor.
+
+It checks Bitcoin Core synchronization, peers, time offset, Chrony status, pruning, disk space and available memory. A systemd timer runs the check every five minutes and records the results in the system journal.
+
+Run an immediate health check:
+
+```bash
+multipass exec bitcoin-node -- \
+  /usr/local/bin/bitcoin-node-health
+```
+
+Show recent automated results:
+
+```bash
+multipass exec bitcoin-node -- \
+  journalctl -u bitcoin-node-health.service \
+    --since "30 minutes ago" \
+    --no-pager
+```
+
+See [docs/monitoring.md](docs/monitoring.md) for installation, thresholds, exit codes, timer management and troubleshooting.
+
+---
+
 # Repository structure
 
 ```text
 bitcoin-node-guide/
 ├── README.md
+├── LICENSE
 ├── .gitignore
 ├── config/
 │   └── bitcoin.conf.example
-├── systemd/
-│   └── bitcoind.service
-└── docs/
+├── docs/
+│   ├── README.md
+│   └── monitoring.md
+├── scripts/
+│   └── bitcoin-node-health.sh
+└── systemd/
+    ├── bitcoind.service
+    ├── bitcoin-node-health.service
+    └── bitcoin-node-health.timer
 ```
 
 ---
