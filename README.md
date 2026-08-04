@@ -1172,6 +1172,221 @@ systemctl status bitcoind --no-pager
 ```
 
 ---
+# Completed synchronization and validation
+
+The initial block download was completed successfully. The node independently validated the blockchain and reached the network tip.
+
+Final results included:
+
+- Blocks equal to headers
+- Verification progress at `100%`
+- `initialblockdownload` set to `false`
+- Automatic pruning enabled
+- Approximately 48.7 GiB stored with a 50,000 MiB pruning target
+- Bitcoin Core enabled and active under systemd
+- Successful automatic startup after a controlled VM restart
+- Multiple outbound peers connected
+- No Bitcoin Core warnings
+
+Check the current node status from the macOS host:
+
+```bash
+multipass exec bitcoin-node -- bitcoin-cli -getinfo
+```
+
+A synchronized node should show:
+
+- `Blocks` equal or very close to `Headers`
+- Verification progress near `100%`
+- A time offset close to zero
+- Connected peers
+- `Warnings: (none)`
+
+Display detailed blockchain and pruning information:
+
+```bash
+multipass exec bitcoin-node -- bitcoin-cli getblockchaininfo |
+jq '{
+  blocks,
+  headers,
+  progress_percent: (.verificationprogress * 100),
+  initial_block_download: .initialblockdownload,
+  pruned,
+  pruneheight,
+  automatic_pruning,
+  size_on_disk_gib: (.size_on_disk / 1073741824)
+}'
+```
+
+Confirm that the service starts automatically and is currently running:
+
+```bash
+multipass exec bitcoin-node -- systemctl is-enabled bitcoind
+multipass exec bitcoin-node -- systemctl is-active bitcoind
+```
+
+Expected results:
+
+```text
+enabled
+active
+```
+
+---
+
+# Clock synchronization in a Multipass VM
+
+A Multipass VM may resume with an incorrect clock after the Mac sleeps. Bitcoin Core can report a large value for:
+
+```text
+Time offset (s)
+```
+
+A large clock difference can disrupt peer communication and Bitcoin consensus checks. Ubuntu 26.04 uses Chrony for network time synchronization.
+
+Check the Mac and VM clocks:
+
+```bash
+date -u
+multipass exec bitcoin-node -- date -u
+```
+
+Inspect Chrony:
+
+```bash
+multipass exec bitcoin-node -- chronyc -N tracking
+multipass exec bitcoin-node -- chronyc -N sources -v
+```
+
+Healthy output should show:
+
+```text
+Leap status     : Normal
+```
+
+The default Chrony configuration contained:
+
+```text
+makestep 1 3
+```
+
+This permits an immediate correction larger than one second only during the first three clock updates after Chrony starts. For this dedicated Bitcoin VM, it was changed to:
+
+```text
+makestep 1 -1
+```
+
+The negative limit permits Chrony to correct a large clock difference even after the VM has been running for some time.
+
+Back up the configuration before changing it:
+
+```bash
+sudo cp -a /etc/chrony/chrony.conf /etc/chrony/chrony.conf.backup
+```
+
+Edit it:
+
+```bash
+sudo nano /etc/chrony/chrony.conf
+```
+
+Verify the setting:
+
+```bash
+grep -n '^[[:space:]]*makestep' /etc/chrony/chrony.conf
+```
+
+Expected output:
+
+```text
+40:makestep 1 -1
+```
+
+Restart Chrony and verify synchronization:
+
+```bash
+sudo systemctl restart chrony
+systemctl is-active chrony
+chronyc -N tracking
+```
+
+This setting allows the system clock to jump when a difference greater than one second is detected. That behaviour is intentional for this dedicated VM but might not be appropriate for systems running applications that require strictly monotonic wall-clock time.
+
+## Manual recovery from a large clock offset
+
+Stop Bitcoin Core before manually forcing a large clock correction:
+
+```bash
+multipass exec bitcoin-node -- sudo systemctl stop bitcoind
+multipass exec bitcoin-node -- systemctl is-active bitcoind
+```
+
+Restart Chrony to obtain fresh time measurements:
+
+```bash
+multipass exec bitcoin-node -- sudo systemctl restart chrony
+```
+
+Force the correction if it is still required:
+
+```bash
+multipass exec bitcoin-node -- sudo chronyc makestep
+```
+
+Compare the clocks:
+
+```bash
+date -u
+multipass exec bitcoin-node -- date -u
+```
+
+Restart Bitcoin Core:
+
+```bash
+multipass exec bitcoin-node -- sudo systemctl start bitcoind
+```
+
+Verify recovery:
+
+```bash
+multipass exec bitcoin-node -- bitcoin-cli -getinfo
+```
+
+The time offset should be close to zero and Bitcoin Core should report no warnings.
+
+---
+
+# Safe daily operation
+
+Start the VM:
+
+```bash
+multipass start bitcoin-node
+```
+
+Bitcoin Core starts automatically through systemd. After approximately 30 seconds, check it:
+
+```bash
+multipass exec bitcoin-node -- bitcoin-cli -getinfo
+```
+
+Safely stop Bitcoin Core and the VM:
+
+```bash
+multipass exec bitcoin-node -- sudo systemctl stop bitcoind
+multipass exec bitcoin-node -- systemctl is-active bitcoind
+multipass stop bitcoin-node
+```
+
+Do not stop the VM until Bitcoin Core reports `inactive`.
+
+To prevent idle sleep on macOS while leaving the display free to lock or turn off:
+
+```bash
+caffeinate -i
+```
+
+Keep the Mac connected to power and its lid open. Stop `caffeinate` with `Control + C`.
 
 # Repository structure
 
