@@ -1,17 +1,17 @@
 # Supplemental Documentation
 
-The complete Bitcoin node installation and operations guide is maintained in
-the repository's main `README.md`.
+The main installation and operations guide is maintained in the repository's root [README](../README.md).
 
-This directory is reserved for future focused guides, such as:
+This directory contains focused operational guides:
 
-- Hardware-wallet integration
-- Private wallet-to-node connections
-- Monitoring and alerting
-- Bitcoin Core upgrades
-- Backup and recovery exercises
-- Network and Tor configuration
-- Regtest experiments
+- [Monitoring](monitoring.md) — automated node-health checks, thresholds, exit codes and troubleshooting
+- [Alerting](alerting.md) — Telegram alerts and macOS Notification Center integration
+- [Clock recovery](../README.md#automatic-recovery-from-severe-clock-drift) — automatic recovery from severe Multipass VM clock drift
+- [Disaster recovery](disaster-recovery.md) — rebuilding the node in a fresh virtual machine
+- [Blockchain backup and restore](blockchain-backup-restore.md) — tested cold backup, integrity verification and restoration of pruned blockchain data
 
-Do not place live logs, wallet data, RPC credentials, seed phrases, private
-keys, blockchain data or VM images in this directory.
+## Security
+
+Do not place live logs, wallet data, RPC credentials, Telegram credentials, seed phrases, private keys, blockchain data, backup archives or virtual-machine images in this directory.
+
+The documentation and example configurations are safe to publish only when they contain no credentials or private wallet information.
