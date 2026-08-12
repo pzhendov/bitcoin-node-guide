@@ -68,6 +68,10 @@ jobs:
           fi
 
           sudo install -o root -g root -m 0755 \
+            scripts/bitcoin-node-clock-recovery.sh \
+            /usr/local/bin/bitcoin-node-clock-recovery
+
+          sudo install -o root -g root -m 0755 \
             scripts/bitcoin-node-health.sh \
             /usr/local/bin/bitcoin-node-health
 
@@ -80,6 +84,8 @@ jobs:
             /usr/local/bin/bitcoin-node-telegram-alert
 
           sudo systemd-analyze verify \
+            systemd/bitcoin-node-clock-recovery.service \
+            systemd/bitcoin-node-clock-recovery.timer \
             systemd/bitcoin-node-health.service \
             systemd/bitcoin-node-health.timer
 

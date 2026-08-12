@@ -1,0 +1,27 @@
+[Unit]
+Description=Recover Bitcoin Core after severe VM clock drift
+Wants=network-online.target chrony.service
+After=network-online.target chrony.service bitcoind.service
+ConditionFileIsExecutable=/usr/local/bin/bitcoin-node-clock-recovery
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+
+RuntimeDirectory=bitcoin-node-clock-recovery
+RuntimeDirectoryMode=0700
+
+ExecStart=/usr/local/bin/bitcoin-node-clock-recovery
+TimeoutStartSec=900
+UMask=0077
+
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
