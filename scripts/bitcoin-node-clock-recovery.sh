@@ -17,9 +17,11 @@ CHRONYC="${CHRONYC:-/usr/bin/chronyc}"
 AWK="${AWK:-/usr/bin/awk}"
 FLOCK="${FLOCK:-/usr/bin/flock}"
 SLEEP="${SLEEP:-/usr/bin/sleep}"
+RM="${RM:-/usr/bin/rm}"
 
 DATADIR="${BITCOIN_DATADIR:-/home/ubuntu/.bitcoin}"
 LOCK_FILE="${CLOCK_RECOVERY_LOCK_FILE:-/run/bitcoin-node-clock-recovery/recovery.lock}"
+STATE_FILE="${CLOCK_RECOVERY_STATE_FILE:-/var/lib/bitcoin-node-clock-recovery/recovery-required}"
 
 RECOVERY_THRESHOLD_SECONDS="${RECOVERY_THRESHOLD_SECONDS:-60}"
 SOURCE_ATTEMPTS="${SOURCE_ATTEMPTS:-30}"
@@ -51,7 +53,8 @@ for executable in \
     "$CHRONYC" \
     "$AWK" \
     "$FLOCK" \
-    "$SLEEP"
+    "$SLEEP" \
+    "$RM"
 do
     require_executable "$executable"
 done
@@ -77,44 +80,71 @@ if ! "$FLOCK" --nonblock 9; then
     exit 0
 fi
 
-if ! "$SYSTEMCTL" is-active --quiet bitcoind.service; then
-    log "bitcoind.service is not active; automatic recovery skipped"
-    exit 0
-fi
+recovery_pending=false
 
-if ! time_offset="$(
-    "$BITCOIN_CLI" \
-        -datadir="$DATADIR" \
-        getnetworkinfo 2>/dev/null |
-        "$JQ" -er '.timeoffset'
-)"; then
-    log "Bitcoin network RPC is not ready; automatic recovery skipped"
-    exit 0
-fi
-
-if [[ ! "$time_offset" =~ ^-?[0-9]+$ ]]; then
-    fail "Bitcoin returned an invalid time offset: $time_offset"
-fi
-
-absolute_time_offset="${time_offset#-}"
-
-if (( absolute_time_offset < RECOVERY_THRESHOLD_SECONDS )); then
-    log "Clock is healthy: Bitcoin time offset is ${time_offset}s"
-    exit 0
-fi
-
-log "Severe Bitcoin time offset detected: ${time_offset}s"
-log "Stopping Bitcoin Core before correcting the system clock"
-
-if ! "$SYSTEMCTL" stop bitcoind.service; then
-    fail "Unable to stop bitcoind.service"
+if [[ -f "$STATE_FILE" ]]; then
+    recovery_pending=true
+    log "Unfinished clock recovery detected; resuming"
 fi
 
 if "$SYSTEMCTL" is-active --quiet bitcoind.service; then
-    fail "bitcoind.service remained active after the stop request"
+    bitcoin_active=true
+else
+    bitcoin_active=false
 fi
 
-log "Bitcoin Core stopped cleanly"
+if [[ "$recovery_pending" != "true" ]]; then
+    if [[ "$bitcoin_active" != "true" ]]; then
+        log "bitcoind.service is not active and no recovery is pending; automatic recovery skipped"
+        exit 0
+    fi
+
+    if ! time_offset="$(
+        "$BITCOIN_CLI" \
+            -datadir="$DATADIR" \
+            getnetworkinfo 2>/dev/null |
+            "$JQ" -er '.timeoffset'
+    )"; then
+        log "Bitcoin network RPC is not ready; automatic recovery skipped"
+        exit 0
+    fi
+
+    if [[ ! "$time_offset" =~ ^-?[0-9]+$ ]]; then
+        fail "Bitcoin returned an invalid time offset: $time_offset"
+    fi
+
+    absolute_time_offset="${time_offset#-}"
+
+    if (( absolute_time_offset < RECOVERY_THRESHOLD_SECONDS )); then
+        log "Clock is healthy: Bitcoin time offset is ${time_offset}s"
+        exit 0
+    fi
+
+    log "Severe Bitcoin time offset detected: ${time_offset}s"
+
+    if ! printf '%s\n' "recovery-required" >"$STATE_FILE"; then
+        fail "Unable to record pending recovery state"
+    fi
+
+    recovery_pending=true
+fi
+
+if [[ "$bitcoin_active" == "true" ]]; then
+    log "Stopping Bitcoin Core before correcting the system clock"
+
+    if ! "$SYSTEMCTL" stop bitcoind.service; then
+        fail "Unable to stop bitcoind.service"
+    fi
+
+    if "$SYSTEMCTL" is-active --quiet bitcoind.service; then
+        fail "bitcoind.service remained active after the stop request"
+    fi
+
+    log "Bitcoin Core stopped cleanly"
+else
+    log "Bitcoin Core remains stopped while clock recovery resumes"
+fi
+
 log "Restarting Chrony to discard stale measurements"
 
 if ! "$SYSTEMCTL" restart chrony.service; then
@@ -217,6 +247,10 @@ fi
 
 if ! "$SYSTEMCTL" is-active --quiet bitcoind.service; then
     fail "Clock recovered, but bitcoind.service is not active"
+fi
+
+if ! "$RM" --force "$STATE_FILE"; then
+    fail "Bitcoin Core is active, but the pending recovery state could not be cleared"
 fi
 
 log "Recovery completed successfully; bitcoind.service is active"
