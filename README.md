@@ -1401,10 +1401,10 @@ Every five minutes, the timer starts a one-shot recovery service.
 The recovery script:
 
 1. Acquires an exclusive lock to prevent overlapping checks.
-2. Confirms that `bitcoind.service` is active.
+2. Determines whether Bitcoin Core is active or an unfinished automatic recovery is pending.
 3. Reads Bitcoin Core’s peer-time offset through local cookie-authenticated RPC.
 4. Exits without interrupting Bitcoin when the absolute offset is below 60 seconds.
-5. Stops Bitcoin Core cleanly when the offset is 60 seconds or greater.
+5. Records a persistent recovery marker and stops Bitcoin Core cleanly when the offset is 60 seconds or greater.
 6. Restarts Chrony to discard stale time measurements.
 7. Retries the Chrony control connection while the daemon starts.
 8. Requests fresh network-time samples.
@@ -1413,18 +1413,19 @@ The recovery script:
 11. Verifies that Chrony reports a normal leap status.
 12. Verifies that the Chrony system offset is no greater than 0.1 seconds.
 13. Restarts Bitcoin Core only after successful clock verification.
+14. Removes the recovery marker only after Bitcoin Core is active.
 
 The absolute offset is evaluated, so both positive and negative clock differences can trigger recovery.
 
 ### Fail-safe behavior
 
-If a required recovery step fails after Bitcoin Core has stopped, the script leaves Bitcoin Core stopped and exits with code `2`.
+If a required recovery step fails after Bitcoin Core has stopped, the script records a persistent recovery marker, leaves Bitcoin Core stopped and exits with code `2`.
 
-This prevents Bitcoin Core from automatically continuing with an unverified system clock.
+This prevents Bitcoin Core from continuing with an unverified system clock. The failure and its reason are recorded in the system journal.
 
-The failure and its reason are recorded in the system journal for investigation.
+On the next timer run, the marker tells the service that Bitcoin was stopped by automatic recovery. The service retries clock recovery even though Bitcoin Core is inactive. After the clock is verified and Bitcoin Core restarts successfully, the marker is removed.
 
-The recovery service does not start Bitcoin Core when it was already inactive. This prevents it from interfering with planned maintenance or an intentional shutdown.
+An inactive Bitcoin service without the marker is treated as an intentional shutdown. Automatic recovery is skipped, so planned maintenance is not overridden.
 
 ### Service privileges and hardening
 
@@ -1628,12 +1629,18 @@ The forced recovery path:
 - Reconnected Bitcoin peers
 - Produced no Bitcoin warnings
 
-The failure path was also tested. When Chrony could not perform a required operation, the service:
+The failure-and-resume path was also tested. When Chrony could not select a source, the service:
 
 - Returned exit code `2`
 - Recorded the exact error in the journal
 - Left Bitcoin Core stopped
-- Required operator verification before Bitcoin was restarted
+- Preserved the persistent recovery marker
+- Retried recovery on a later service run
+- Verified the recovered clock
+- Restarted Bitcoin Core automatically
+- Cleared the recovery marker after success
+
+An intentional Bitcoin shutdown without a recovery marker was also tested and remained inactive as expected.
 
 ### Disable automatic recovery
 

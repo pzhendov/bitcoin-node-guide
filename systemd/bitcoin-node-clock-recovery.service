@@ -12,6 +12,9 @@ Group=root
 RuntimeDirectory=bitcoin-node-clock-recovery
 RuntimeDirectoryMode=0700
 
+StateDirectory=bitcoin-node-clock-recovery
+StateDirectoryMode=0700
+
 ExecStart=/usr/local/bin/bitcoin-node-clock-recovery
 TimeoutStartSec=900
 UMask=0077
