@@ -1358,6 +1358,296 @@ The time offset should be close to zero and Bitcoin Core should report no warnin
 
 ---
 
+## Automatic recovery from severe clock drift
+
+A Multipass VM can resume after macOS sleep with a stale system clock. In testing, the VM clock remained many hours behind the Mac even though Chrony initially appeared synchronized.
+
+Bitcoin Core reported the problem through a large peer-time offset:
+
+```text
+Time offset (s): 45837
+```
+
+Chrony sources also showed that the VM was approximately one day behind:
+
+```text
+-86480s
+```
+
+The project includes an automatic recovery service that detects this condition, stops Bitcoin Core safely, refreshes Chrony and restarts Bitcoin Core only after the system clock has been verified.
+
+### Recovery files
+
+Repository files:
+
+```text
+scripts/bitcoin-node-clock-recovery.sh
+systemd/bitcoin-node-clock-recovery.service
+systemd/bitcoin-node-clock-recovery.timer
+```
+
+Installed locations inside the VM:
+
+```text
+/usr/local/bin/bitcoin-node-clock-recovery
+/etc/systemd/system/bitcoin-node-clock-recovery.service
+/etc/systemd/system/bitcoin-node-clock-recovery.timer
+```
+
+### Recovery sequence
+
+Every five minutes, the timer starts a one-shot recovery service.
+
+The recovery script:
+
+1. Acquires an exclusive lock to prevent overlapping checks.
+2. Confirms that `bitcoind.service` is active.
+3. Reads Bitcoin Core’s peer-time offset through local cookie-authenticated RPC.
+4. Exits without interrupting Bitcoin when the absolute offset is below 60 seconds.
+5. Stops Bitcoin Core cleanly when the offset is 60 seconds or greater.
+6. Restarts Chrony to discard stale time measurements.
+7. Retries the Chrony control connection while the daemon starts.
+8. Requests fresh network-time samples.
+9. Waits for Chrony to select a valid source.
+10. Steps the VM system clock.
+11. Verifies that Chrony reports a normal leap status.
+12. Verifies that the Chrony system offset is no greater than 0.1 seconds.
+13. Restarts Bitcoin Core only after successful clock verification.
+
+The absolute offset is evaluated, so both positive and negative clock differences can trigger recovery.
+
+### Fail-safe behavior
+
+If a required recovery step fails after Bitcoin Core has stopped, the script leaves Bitcoin Core stopped and exits with code `2`.
+
+This prevents Bitcoin Core from automatically continuing with an unverified system clock.
+
+The failure and its reason are recorded in the system journal for investigation.
+
+The recovery service does not start Bitcoin Core when it was already inactive. This prevents it from interfering with planned maintenance or an intentional shutdown.
+
+### Service privileges and hardening
+
+The recovery service runs as `root` because it must stop and start system services.
+
+The service retains filesystem, home-directory, kernel, control-group, personality, SUID/SGID and address-family restrictions.
+
+`NoNewPrivileges=true` is intentionally not used for this service. During testing, that restriction prevented `chronyc` from dropping privileges to the Chrony system user:
+
+```text
+setuid(...) failed: Operation not permitted
+```
+
+The service correctly treated this as a recovery failure and left Bitcoin Core stopped.
+
+### Install the recovery script
+
+Transfer the script from the repository to the VM:
+
+```bash
+multipass transfer \
+  scripts/bitcoin-node-clock-recovery.sh \
+  bitcoin-node:/home/ubuntu/bitcoin-node-clock-recovery.sh
+```
+
+Install it as a root-owned executable:
+
+```bash
+multipass exec -n bitcoin-node -- sudo install \
+  -o root -g root -m 0755 \
+  /home/ubuntu/bitcoin-node-clock-recovery.sh \
+  /usr/local/bin/bitcoin-node-clock-recovery
+```
+
+### Install the systemd units
+
+Transfer the service:
+
+```bash
+multipass transfer \
+  systemd/bitcoin-node-clock-recovery.service \
+  bitcoin-node:/home/ubuntu/bitcoin-node-clock-recovery.service
+```
+
+Transfer the timer:
+
+```bash
+multipass transfer \
+  systemd/bitcoin-node-clock-recovery.timer \
+  bitcoin-node:/home/ubuntu/bitcoin-node-clock-recovery.timer
+```
+
+Install both unit files:
+
+```bash
+multipass exec -n bitcoin-node -- sudo install \
+  -o root -g root -m 0644 \
+  /home/ubuntu/bitcoin-node-clock-recovery.service \
+  /home/ubuntu/bitcoin-node-clock-recovery.timer \
+  /etc/systemd/system/
+```
+
+Validate the installed units:
+
+```bash
+multipass exec -n bitcoin-node -- sudo systemd-analyze verify \
+  /etc/systemd/system/bitcoin-node-clock-recovery.service \
+  /etc/systemd/system/bitcoin-node-clock-recovery.timer
+```
+
+Ubuntu may print unrelated warnings about the removed `CPUAccounting` option in XFS units. The clock-recovery units are valid when no errors mention them and the command returns exit code `0`.
+
+Reload systemd:
+
+```bash
+multipass exec -n bitcoin-node -- sudo systemctl daemon-reload
+```
+
+Enable and start the timer:
+
+```bash
+multipass exec -n bitcoin-node -- sudo systemctl enable --now \
+  bitcoin-node-clock-recovery.timer
+```
+
+### Verify the timer
+
+Confirm that the timer is enabled:
+
+```bash
+multipass exec -n bitcoin-node -- systemctl is-enabled \
+  bitcoin-node-clock-recovery.timer
+```
+
+Expected output:
+
+```text
+enabled
+```
+
+Confirm that it is active:
+
+```bash
+multipass exec -n bitcoin-node -- systemctl is-active \
+  bitcoin-node-clock-recovery.timer
+```
+
+Expected output:
+
+```text
+active
+```
+
+Show the previous and next scheduled checks:
+
+```bash
+multipass exec -n bitcoin-node -- systemctl list-timers \
+  bitcoin-node-clock-recovery.timer \
+  --no-pager
+```
+
+### Inspect automatic checks
+
+Show checks from the last 30 minutes:
+
+```bash
+multipass exec -n bitcoin-node -- journalctl \
+  -u bitcoin-node-clock-recovery.service \
+  --since "30 minutes ago" \
+  --no-pager
+```
+
+A normal healthy check resembles:
+
+```text
+[CLOCK-RECOVERY] Clock is healthy: Bitcoin time offset is -1s
+```
+
+A successful recovery records these stages:
+
+```text
+[CLOCK-RECOVERY] Severe Bitcoin time offset detected
+[CLOCK-RECOVERY] Bitcoin Core stopped cleanly
+[CLOCK-RECOVERY] Fresh Chrony samples requested
+[CLOCK-RECOVERY] Chrony selected a fresh time source
+[CLOCK-RECOVERY] Clock recovery verified
+[CLOCK-RECOVERY] Recovery completed successfully
+```
+
+### Verify Bitcoin after recovery
+
+Check Bitcoin Core:
+
+```bash
+multipass exec -n bitcoin-node -- bitcoin-cli -getinfo
+```
+
+Healthy output should show:
+
+- Blocks equal to headers after catching up
+- Verification progress at 100%
+- Connected outbound peers
+- Time offset close to zero
+- No warnings
+
+Check Chrony:
+
+```bash
+multipass exec -n bitcoin-node -- chronyc -N tracking
+```
+
+Healthy output should include:
+
+```text
+Leap status     : Normal
+```
+
+### Tested behavior
+
+The implementation was tested on the running Apple Silicon Multipass node.
+
+The healthy-clock path:
+
+- Returned exit code `0`
+- Reported a healthy Bitcoin time offset
+- Left the Bitcoin process ID unchanged
+- Did not interrupt Bitcoin Core
+
+The forced recovery path:
+
+- Detected the configured recovery condition
+- Stopped Bitcoin Core cleanly
+- Restarted Chrony
+- Retried Chrony while its control interface became ready
+- Requested fresh time samples
+- Selected a valid NTP source
+- Verified a near-zero clock offset
+- Restarted Bitcoin Core
+- Returned exit code `0`
+- Preserved 100% blockchain synchronization
+- Reconnected Bitcoin peers
+- Produced no Bitcoin warnings
+
+The failure path was also tested. When Chrony could not perform a required operation, the service:
+
+- Returned exit code `2`
+- Recorded the exact error in the journal
+- Left Bitcoin Core stopped
+- Required operator verification before Bitcoin was restarted
+
+### Disable automatic recovery
+
+Disable and stop the timer:
+
+```bash
+multipass exec -n bitcoin-node -- sudo systemctl disable --now \
+  bitcoin-node-clock-recovery.timer
+```
+
+Disabling the timer does not stop Bitcoin Core and does not remove the installed files.
+
+Manual clock recovery remains available if automatic recovery cannot complete.
+
 # Safe daily operation
 
 Start the VM:
@@ -1465,11 +1755,14 @@ bitcoin-node-guide/
 ├── launchd/
 │   └── com.pzhendov.bitcoin-node-health-notify.plist
 ├── scripts/
+│   ├── bitcoin-node-clock-recovery.sh
 │   ├── bitcoin-node-health-runner.sh
 │   ├── bitcoin-node-health.sh
 │   ├── bitcoin-node-telegram-alert.sh
 │   └── macos-bitcoin-node-notify.sh
 └── systemd/
+    ├── bitcoin-node-clock-recovery.service
+    ├── bitcoin-node-clock-recovery.timer
     ├── bitcoind.service
     ├── bitcoin-node-health.service
     └── bitcoin-node-health.timer
