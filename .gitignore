@@ -21,6 +21,11 @@ mempool.dat
 fee_estimates.dat
 settings.json
 
+# Local blockchain backup artifacts
+bitcoin-node-pruned-*.tar.zst
+bitcoin-node-pruned-*.tar.zst.*
+bitcoin-node-pruned-*.manifest.txt
+
 # Downloaded releases and verification repositories
 bitcoin-download/
 bitcoin-*-linux-gnu.tar.gz

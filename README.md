@@ -1699,6 +1699,18 @@ See [docs/disaster-recovery.md](docs/disaster-recovery.md) for the complete reco
 
 ---
 
+# Pruned blockchain backup and restore
+
+The project includes a tested cold-backup procedure for preserving and restoring the validated pruned blockchain state.
+
+The backup contains only the public `blocks/` and `chainstate/` directories. It does not contain wallets, private keys, seed phrases, RPC credentials or other secret material.
+
+The documented procedure covers clean Bitcoin Core shutdown, compressed archive creation, integrity verification, transfer to the Mac, restoration into a disposable VM and a complete synchronization and restart test.
+
+See [docs/blockchain-backup-restore.md](docs/blockchain-backup-restore.md) for the complete backup, restore, verification and recovery procedure.
+
+---
+
 # Automated health monitoring
 
 The project includes an automated Bitcoin node health monitor.
@@ -1749,14 +1761,18 @@ See [docs/alerting.md](docs/alerting.md) for architecture, installation, testing
 
 ```text
 bitcoin-node-guide/
-├── README.md
-├── LICENSE
+├── .github/
+│   └── workflows/
+│       └── validate.yml
 ├── .gitignore
+├── LICENSE
+├── README.md
 ├── config/
 │   └── bitcoin.conf.example
 ├── docs/
 │   ├── README.md
 │   ├── alerting.md
+│   ├── blockchain-backup-restore.md
 │   ├── disaster-recovery.md
 │   └── monitoring.md
 ├── launchd/
