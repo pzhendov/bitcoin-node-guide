@@ -8,7 +8,7 @@
 #   2 = preflight, backup, verification, or recovery failed
 
 # The dollar expressions in AWK programs belong to AWK, not Bash.
-# shellcheck disable=SC2016,SC2329
+# shellcheck disable=SC2016,SC2317,SC2329
 
 set -u
 set -o pipefail
