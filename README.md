@@ -1707,7 +1707,11 @@ The backup contains only the public `blocks/` and `chainstate/` directories. It 
 
 The documented procedure covers clean Bitcoin Core shutdown, compressed archive creation, integrity verification, transfer to the Mac, restoration into a disposable VM and a complete synchronization and restart test.
 
+The repository also includes tested automation that performs strict preflight checks, coordinates the cold backup, verifies the VM and Mac checksums, creates a manifest, restores services and cleans up temporary artifacts.
+
 See [docs/blockchain-backup-restore.md](docs/blockchain-backup-restore.md) for the complete backup, restore, verification and recovery procedure.
+
+See [docs/backup-automation.md](docs/backup-automation.md) for automated backup installation, safety behavior, execution, verification and troubleshooting.
 
 ---
 
@@ -1772,16 +1776,19 @@ bitcoin-node-guide/
 ├── docs/
 │   ├── README.md
 │   ├── alerting.md
+│   ├── backup-automation.md
 │   ├── blockchain-backup-restore.md
 │   ├── disaster-recovery.md
 │   └── monitoring.md
 ├── launchd/
 │   └── com.pzhendov.bitcoin-node-health-notify.plist
 ├── scripts/
+│   ├── bitcoin-node-backup-create.sh
 │   ├── bitcoin-node-clock-recovery.sh
 │   ├── bitcoin-node-health-runner.sh
 │   ├── bitcoin-node-health.sh
 │   ├── bitcoin-node-telegram-alert.sh
+│   ├── macos-bitcoin-node-backup.sh
 │   └── macos-bitcoin-node-notify.sh
 └── systemd/
     ├── bitcoin-node-clock-recovery.service
