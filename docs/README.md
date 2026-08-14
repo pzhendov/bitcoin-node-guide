@@ -9,6 +9,7 @@ This directory contains focused operational guides:
 - [Clock recovery](../README.md#automatic-recovery-from-severe-clock-drift) — automatic recovery from severe Multipass VM clock drift
 - [Disaster recovery](disaster-recovery.md) — rebuilding the node in a fresh virtual machine
 - [Blockchain backup and restore](blockchain-backup-restore.md) — tested cold backup, integrity verification and restoration of pruned blockchain data
+- [Safe backup automation](backup-automation.md) — automated preflight, cold archive creation, transfer, checksum verification and service recovery
 
 ## Security
 
