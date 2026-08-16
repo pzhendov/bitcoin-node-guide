@@ -667,6 +667,81 @@ A backup stored only on the same Mac is vulnerable to disk failure, loss, theft 
 
 Keep at least one additional verified copy on a separate encrypted device. Recheck its SHA-256 checksum periodically.
 
+## Tested automated restore rehearsal
+
+A complete restore rehearsal was successfully performed on 16 August 2026 using a cold backup created by the automated backup workflow on 14 August 2026.
+
+### Backup evidence
+
+- Source node: pruned Bitcoin Core 31.1 mainnet node
+- Backup block height: `962373`
+- Archive format: Zstandard-compressed tar archive
+- Archive size: approximately 47 GiB
+- Archive contents: `blocks/` and `chainstate/` only
+- SHA-256: `560aaffd6285ade6850835902f16e6ef45a1188d802c18c40dc08ab3fd43e03d`
+- Mac-side checksum verification: passed
+- External-drive checksum verification: passed
+
+### Restore environment
+
+The archive was restored into a fresh disposable Multipass VM named `bitcoin-backup-test` with:
+
+- Ubuntu 26.04 LTS ARM64
+- 4 virtual CPU cores
+- 6 GiB memory
+- 150 GB virtual disk
+- Bitcoin Core 31.1 installed from a checksum-verified and signature-verified official release
+
+The Bitcoin configuration and systemd service were restored separately from the tagged repository. No wallet, seed phrase, private key, RPC password or Telegram credential was copied into the test VM.
+
+### Restore validation
+
+Before extraction:
+
+- The transferred archive passed SHA-256 verification.
+- The archive paths were inspected.
+- The only top-level archive entries were `blocks/` and `chainstate/`.
+
+After extraction, Bitcoin Core loaded the restored block index and resumed synchronization from the backup height.
+
+The restored node then reached:
+
+```text
+Blocks: 962780
+Headers: 962780
+Verification progress: 100.0000%
+Initial block download: false
+Pruned: true
+Prune height: 934218
+Size on disk: approximately 48.74 GiB
+Network connections: 10
+Time offset: -1 second
+Warnings: none
+```
+
+The restored node also passed a clean stop and automatic-start test:
+
+- `bitcoind.service` was enabled.
+- Bitcoin Core shut down cleanly with `Shutdown done`.
+- The disposable VM was stopped and started again.
+- `bitcoind.service` started automatically.
+- The restored node returned to 100% synchronization with no warnings.
+
+### Rehearsal cleanup
+
+After successful validation:
+
+- Bitcoin Core in the disposable VM was stopped cleanly.
+- The production VM was restarted and verified healthy.
+- Production health and clock-recovery timers were active.
+- Chrony reported `Leap status: Normal`.
+- The macOS notification monitor was restored and exited successfully.
+- The disposable restore VM was permanently removed.
+
+This rehearsal demonstrates that the automated cold-backup archive is usable for recovery and not merely present or checksum-valid. Future backups should still be tested periodically because software versions, operating-system images and recovery procedures can change.
+
+---
+
 ## Final backup checklist
 
 - [ ] Production node fully synchronized before backup
