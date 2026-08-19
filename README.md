@@ -1723,6 +1723,11 @@ The audit does not hash, transfer, modify or delete backup archives. Its macOS L
 
 See [docs/backup-freshness-monitor.md](docs/backup-freshness-monitor.md) for policy defaults, installation, notification behavior, testing and troubleshooting.
 
+The project also includes a monthly read-only deep-integrity audit. It recalculates SHA-256 checksums and tests the complete Zstandard stream of retained backups without modifying the archives.
+
+Successful checks create protected verification receipts. The optional external backup is checked when its drive is mounted, and state-change notifications report failures and recovery without repeating unchanged results.
+
+See [docs/backup-deep-integrity.md](docs/backup-deep-integrity.md) for installation, verification scope, receipts, scheduling, notifications, resource requirements and troubleshooting.
 
 ---
 
@@ -1788,12 +1793,14 @@ bitcoin-node-guide/
 │   ├── README.md
 │   ├── alerting.md
 │   ├── backup-automation.md
+│   ├── backup-deep-integrity.md
 │   ├── backup-freshness-monitor.md
 │   ├── backup-retention.md
 │   ├── blockchain-backup-restore.md
 │   ├── disaster-recovery.md
 │   └── monitoring.md
 ├── launchd/
+│   ├── com.pzhendov.bitcoin-node-backup-deep-notify.plist
 │   ├── com.pzhendov.bitcoin-node-backup-notify.plist
 │   └── com.pzhendov.bitcoin-node-health-notify.plist
 ├── scripts/
@@ -1803,6 +1810,8 @@ bitcoin-node-guide/
 │   ├── bitcoin-node-health.sh
 │   ├── bitcoin-node-telegram-alert.sh
 │   ├── macos-bitcoin-node-backup-audit.sh
+│   ├── macos-bitcoin-node-backup-deep-audit.sh
+│   ├── macos-bitcoin-node-backup-deep-notify.sh
 │   ├── macos-bitcoin-node-backup-notify.sh
 │   ├── macos-bitcoin-node-backup-retention.sh
 │   ├── macos-bitcoin-node-backup.sh
