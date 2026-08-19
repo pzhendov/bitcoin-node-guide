@@ -11,6 +11,7 @@ This directory contains focused operational guides:
 - [Blockchain backup and restore](blockchain-backup-restore.md) — tested cold backup, integrity verification and restoration of pruned blockchain data
 - [Safe backup automation](backup-automation.md) — automated preflight, cold archive creation, transfer, checksum verification and service recovery
 - [Safe backup retention](backup-retention.md) — checksum-verified inventory, two-backup protection, dry-run decisions and explicitly confirmed deletion
+- [Backup freshness monitoring](backup-freshness-monitor.md) — daily read-only checks for backup completeness, age, free space and external-copy status with macOS state-change notifications
 
 ## Security
 
