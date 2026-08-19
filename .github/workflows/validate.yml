@@ -161,7 +161,155 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          bash -n scripts/macos-bitcoin-node-backup.sh
+          bash -n scripts/macos-bitcoin-node-backup-retention.sh
           bash -n scripts/macos-bitcoin-node-notify.sh
+
+      - name: Test backup retention safety
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          retention_directory="$(
+            mktemp -d "${TMPDIR:-/tmp}/bitcoin-retention-ci.XXXXXX"
+          )"
+
+          unexpected_directory="$(
+            mktemp -d "${TMPDIR:-/tmp}/bitcoin-retention-unexpected-ci.XXXXXX"
+          )"
+
+          cleanup() {
+            rm -rf -- \
+              "$retention_directory" \
+              "$unexpected_directory"
+          }
+
+          trap cleanup EXIT
+
+          create_fixture() {
+            local block_height="$1"
+            local backup_date="$2"
+            local backup_stem="bitcoin-node-pruned-${block_height}-${backup_date}"
+            local archive_path="${retention_directory}/${backup_stem}.tar.zst"
+
+            printf 'test backup for block %s\n' "$block_height" \
+              > "$archive_path"
+
+            shasum -a 256 "$archive_path" \
+              > "${archive_path}.sha256"
+
+            printf 'block=%s\ndate=%s\n' \
+              "$block_height" \
+              "$backup_date" \
+              > "${retention_directory}/${backup_stem}.manifest.txt"
+          }
+
+          create_fixture 100 2026-08-01
+          create_fixture 200 2026-08-02
+          create_fixture 300 2026-08-03
+
+          dry_run_output="$(
+            scripts/macos-bitcoin-node-backup-retention.sh \
+              --dry-run \
+              --keep 2 \
+              --destination "$retention_directory"
+          )"
+
+          printf '%s\n' "$dry_run_output"
+
+          grep -q 'PROTECT: block=300' <<< "$dry_run_output"
+          grep -q 'PROTECT: block=200' <<< "$dry_run_output"
+          grep -q 'CANDIDATE: block=100' <<< "$dry_run_output"
+          grep -q 'complete=3 protected=2 candidates=1' <<< "$dry_run_output"
+
+          fixture_count="$(
+            find "$retention_directory" -type f |
+              wc -l |
+              tr -d ' '
+          )"
+
+          [[ "$fixture_count" == "9" ]]
+
+          scripts/macos-bitcoin-node-backup-retention.sh \
+            --execute \
+            --confirm-retention-delete \
+            --keep 2 \
+            --destination "$retention_directory"
+
+          [[ ! -e "$retention_directory/bitcoin-node-pruned-100-2026-08-01.tar.zst" ]]
+          [[ -e "$retention_directory/bitcoin-node-pruned-200-2026-08-02.tar.zst" ]]
+          [[ -e "$retention_directory/bitcoin-node-pruned-300-2026-08-03.tar.zst" ]]
+
+          fixture_count="$(
+            find "$retention_directory" -type f |
+              wc -l |
+              tr -d ' '
+          )"
+
+          [[ "$fixture_count" == "6" ]]
+
+          create_fixture 100 2026-08-01
+
+          printf 'intentional corruption\n' \
+            >> "$retention_directory/bitcoin-node-pruned-100-2026-08-01.tar.zst"
+
+          set +e
+          corrupt_output="$(
+            scripts/macos-bitcoin-node-backup-retention.sh \
+              --execute \
+              --confirm-retention-delete \
+              --keep 2 \
+              --destination "$retention_directory" \
+              2>&1
+          )"
+          corrupt_status=$?
+          set -e
+
+          printf '%s\n' "$corrupt_output"
+
+          [[ "$corrupt_status" == "2" ]]
+          grep -q 'Archive checksum verification failed' <<< "$corrupt_output"
+
+          unexpected_archive="$unexpected_directory/bitcoin-node-pruned-unexpected.tar.zst"
+
+          printf 'unexpected fixture\n' > "$unexpected_archive"
+          shasum -a 256 "$unexpected_archive" > "${unexpected_archive}.sha256"
+          printf 'unexpected=true\n' \
+            > "$unexpected_directory/bitcoin-node-pruned-unexpected.manifest.txt"
+
+          set +e
+          unexpected_output="$(
+            scripts/macos-bitcoin-node-backup-retention.sh \
+              --dry-run \
+              --keep 2 \
+              --destination "$unexpected_directory" \
+              2>&1
+          )"
+          unexpected_status=$?
+          set -e
+
+          printf '%s\n' "$unexpected_output"
+
+          [[ "$unexpected_status" == "2" ]]
+          grep -q 'Unexpected archive names require manual inspection' \
+            <<< "$unexpected_output"
+
+          set +e
+          scripts/macos-bitcoin-node-backup-retention.sh \
+            --execute \
+            --keep 2 \
+            --destination "$retention_directory"
+          unconfirmed_status=$?
+
+          scripts/macos-bitcoin-node-backup-retention.sh \
+            --dry-run \
+            --keep 1 \
+            --destination "$retention_directory"
+          unsafe_keep_status=$?
+          set -e
+
+          [[ "$unconfirmed_status" == "1" ]]
+          [[ "$unsafe_keep_status" == "1" ]]
 
       - name: Validate LaunchAgent plist
         shell: bash
