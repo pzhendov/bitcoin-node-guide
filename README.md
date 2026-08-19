@@ -1717,6 +1717,13 @@ The project also includes checksum-verified backup retention with a mandatory dr
 
 See [docs/backup-retention.md](docs/backup-retention.md) for retention policy, safety barriers, dry-run interpretation, controlled deletion, failure behavior and tested evidence.
 
+The project also includes a daily read-only backup freshness audit. It checks local backup completeness, backup age, artifact permissions, remaining Mac storage and the newest external copy when the external drive is mounted.
+
+The audit does not hash, transfer, modify or delete backup archives. Its macOS LaunchAgent sends notifications only when the result changes between `HEALTHY`, `WARNING` and `CRITICAL`.
+
+See [docs/backup-freshness-monitor.md](docs/backup-freshness-monitor.md) for policy defaults, installation, notification behavior, testing and troubleshooting.
+
+
 ---
 
 # Automated health monitoring
@@ -1781,11 +1788,13 @@ bitcoin-node-guide/
 │   ├── README.md
 │   ├── alerting.md
 │   ├── backup-automation.md
+│   ├── backup-freshness-monitor.md
 │   ├── backup-retention.md
 │   ├── blockchain-backup-restore.md
 │   ├── disaster-recovery.md
 │   └── monitoring.md
 ├── launchd/
+│   ├── com.pzhendov.bitcoin-node-backup-notify.plist
 │   └── com.pzhendov.bitcoin-node-health-notify.plist
 ├── scripts/
 │   ├── bitcoin-node-backup-create.sh
@@ -1793,6 +1802,8 @@ bitcoin-node-guide/
 │   ├── bitcoin-node-health-runner.sh
 │   ├── bitcoin-node-health.sh
 │   ├── bitcoin-node-telegram-alert.sh
+│   ├── macos-bitcoin-node-backup-audit.sh
+│   ├── macos-bitcoin-node-backup-notify.sh
 │   ├── macos-bitcoin-node-backup-retention.sh
 │   ├── macos-bitcoin-node-backup.sh
 │   └── macos-bitcoin-node-notify.sh

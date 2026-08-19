@@ -161,8 +161,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash -n scripts/macos-bitcoin-node-backup.sh
+          bash -n scripts/macos-bitcoin-node-backup-audit.sh
+          bash -n scripts/macos-bitcoin-node-backup-notify.sh
           bash -n scripts/macos-bitcoin-node-backup-retention.sh
+          bash -n scripts/macos-bitcoin-node-backup.sh
           bash -n scripts/macos-bitcoin-node-notify.sh
 
       - name: Test backup retention safety
@@ -311,9 +313,108 @@ jobs:
           [[ "$unconfirmed_status" == "1" ]]
           [[ "$unsafe_keep_status" == "1" ]]
 
-      - name: Validate LaunchAgent plist
+      - name: Test backup freshness audit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          audit_root="$(
+            mktemp -d "${TMPDIR:-/tmp}/bitcoin-backup-audit-ci.XXXXXX"
+          )"
+          audit_directory="${audit_root}/backups"
+          external_directory="${audit_root}/external-volume/bitcoin-node-backups"
+
+          cleanup() {
+            rm -rf "$audit_root"
+          }
+          trap cleanup EXIT
+
+          mkdir -p "$audit_directory"
+
+          today="$(date -u '+%Y-%m-%d')"
+          yesterday="$(date -u -v-1d '+%Y-%m-%d')"
+
+          for backup_specification in \
+            "300:${today}" \
+            "200:${yesterday}"
+          do
+            block_height="${backup_specification%%:*}"
+            backup_date="${backup_specification#*:}"
+            backup_base="bitcoin-node-pruned-${block_height}-${backup_date}"
+            archive_path="${audit_directory}/${backup_base}.tar.zst"
+            checksum_path="${archive_path}.sha256"
+            manifest_path="${audit_directory}/${backup_base}.manifest.txt"
+
+            printf 'test archive\n' >"$archive_path"
+            printf '%064d  %s\n' \
+              0 \
+              "${backup_base}.tar.zst" \
+              >"$checksum_path"
+            printf 'block_height=%s\nbackup_date=%s\n' \
+              "$block_height" \
+              "$backup_date" \
+              >"$manifest_path"
+
+            chmod 600 \
+              "$archive_path" \
+              "$checksum_path" \
+              "$manifest_path"
+          done
+
+          healthy_output="$(
+            scripts/macos-bitcoin-node-backup-audit.sh \
+              --local-directory "$audit_directory" \
+              --external-directory "$external_directory" \
+              --stale-days 7 \
+              --critical-days 14 \
+              --minimum-backups 2 \
+              --warning-free-gib 1 \
+              --critical-free-gib 0
+          )"
+
+          printf '%s\n' "$healthy_output"
+          grep -q '\[SUMMARY\] status=HEALTHY' <<<"$healthy_output"
+
+          set +e
+          warning_output="$(
+            scripts/macos-bitcoin-node-backup-audit.sh \
+              --local-directory "$audit_directory" \
+              --external-directory "$external_directory" \
+              --stale-days 7 \
+              --critical-days 14 \
+              --minimum-backups 3 \
+              --warning-free-gib 1 \
+              --critical-free-gib 0
+          )"
+          warning_status=$?
+          set -e
+
+          printf '%s\n' "$warning_output"
+          test "$warning_status" -eq 1
+          grep -q '\[SUMMARY\] status=WARNING' <<<"$warning_output"
+
+          set +e
+          critical_output="$(
+            scripts/macos-bitcoin-node-backup-audit.sh \
+              --local-directory "${audit_root}/missing" \
+              --external-directory "$external_directory" \
+              --stale-days 7 \
+              --critical-days 14 \
+              --minimum-backups 2 \
+              --warning-free-gib 1 \
+              --critical-free-gib 0
+          )"
+          critical_status=$?
+          set -e
+
+          printf '%s\n' "$critical_output"
+          test "$critical_status" -eq 2
+          grep -q '\[SUMMARY\] status=CRITICAL' <<<"$critical_output"
+
+      - name: Validate LaunchAgent plists
         shell: bash
         run: |
           set -euo pipefail
           plutil -lint \
+            launchd/com.pzhendov.bitcoin-node-backup-notify.plist \
             launchd/com.pzhendov.bitcoin-node-health-notify.plist
