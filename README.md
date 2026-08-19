@@ -1713,6 +1713,10 @@ See [docs/blockchain-backup-restore.md](docs/blockchain-backup-restore.md) for t
 
 See [docs/backup-automation.md](docs/backup-automation.md) for automated backup installation, safety behavior, execution, verification and troubleshooting.
 
+The project also includes checksum-verified backup retention with a mandatory dry-run, protection for the newest two complete recovery points and explicitly confirmed deletion of older verified sets.
+
+See [docs/backup-retention.md](docs/backup-retention.md) for retention policy, safety barriers, dry-run interpretation, controlled deletion, failure behavior and tested evidence.
+
 ---
 
 # Automated health monitoring
@@ -1777,6 +1781,7 @@ bitcoin-node-guide/
 │   ├── README.md
 │   ├── alerting.md
 │   ├── backup-automation.md
+│   ├── backup-retention.md
 │   ├── blockchain-backup-restore.md
 │   ├── disaster-recovery.md
 │   └── monitoring.md
@@ -1788,6 +1793,7 @@ bitcoin-node-guide/
 │   ├── bitcoin-node-health-runner.sh
 │   ├── bitcoin-node-health.sh
 │   ├── bitcoin-node-telegram-alert.sh
+│   ├── macos-bitcoin-node-backup-retention.sh
 │   ├── macos-bitcoin-node-backup.sh
 │   └── macos-bitcoin-node-notify.sh
 └── systemd/
