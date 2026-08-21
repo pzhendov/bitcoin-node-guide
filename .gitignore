@@ -45,3 +45,8 @@ guix.sigs/
 # Alert credentials
 *.env
 telegram.env
+
+# Sparrow RPC bridge credentials and live configuration
+sparrow-rpc.conf
+sparrow-rpc-credentials.txt
+*rpc-credentials.txt
