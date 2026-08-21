@@ -1735,6 +1735,18 @@ See [docs/backup-external-replication.md](docs/backup-external-replication.md) f
 
 ---
 
+# Sparrow Wallet and hardware-wallet preparation
+
+The project includes a restricted Bitcoin Core RPC bridge for connecting Sparrow Wallet on the Mac directly to the pruned node inside Multipass.
+
+The setup uses a dedicated `rpcauth` identity, root-protected credentials, the VM's private IPv4 address and an exact `/32` allow rule for the Mac bridge. It refuses wildcard RPC exposure, creates a rollback copy and restores the previous Bitcoin configuration if restart validation fails.
+
+Sparrow's built-in Cormorant connector was tested against the node without creating a user wallet or connecting a hardware device. Cormorant created an internal descriptor wallet named `cormorant`; Bitcoin Core reported `private_keys_enabled: false`. The bridge therefore enables watch-only tracking without giving Bitcoin Core or Sparrow access to hardware-wallet private keys.
+
+See [docs/sparrow-bitcoin-core.md](docs/sparrow-bitcoin-core.md) for the security model, setup command, protected password transfer, macOS Local Network permission, connection testing, rollback and Trezor safety checkpoint.
+
+---
+
 # Automated health monitoring
 
 The project includes an automated Bitcoin node health monitor.
@@ -1803,7 +1815,8 @@ bitcoin-node-guide/
 │   ├── backup-retention.md
 │   ├── blockchain-backup-restore.md
 │   ├── disaster-recovery.md
-│   └── monitoring.md
+│   ├── monitoring.md
+│   └── sparrow-bitcoin-core.md
 ├── launchd/
 │   ├── com.pzhendov.bitcoin-node-backup-deep-notify.plist
 │   ├── com.pzhendov.bitcoin-node-backup-notify.plist
@@ -1813,6 +1826,7 @@ bitcoin-node-guide/
 │   ├── bitcoin-node-clock-recovery.sh
 │   ├── bitcoin-node-health-runner.sh
 │   ├── bitcoin-node-health.sh
+│   ├── bitcoin-node-sparrow-rpc-setup.sh
 │   ├── bitcoin-node-telegram-alert.sh
 │   ├── macos-bitcoin-node-backup-audit.sh
 │   ├── macos-bitcoin-node-backup-deep-audit.sh

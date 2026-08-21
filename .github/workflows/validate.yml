@@ -125,6 +125,83 @@ jobs:
             exit 1
           fi
 
+      - name: Reject committed Sparrow RPC secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          forbidden_files="$(
+            find . \
+              -path './.git' -prune -o \
+              -type f \
+              \( \
+                -name 'sparrow-rpc.conf' -o \
+                -name 'sparrow-rpc-credentials.txt' -o \
+                -name '*rpc-credentials.txt' \
+              \) \
+              -print
+          )"
+
+          if [[ -n "$forbidden_files" ]]; then
+            echo "Live Sparrow RPC files must not be committed:"
+            printf '%s\n' "$forbidden_files"
+            exit 1
+          fi
+
+          if grep \
+            --recursive \
+            --line-number \
+            --extended-regexp \
+            --exclude-dir=.git \
+            'rpcauth=[A-Za-z0-9_-]+:[0-9a-fA-F]{16,}\$[0-9a-fA-F]{32,}' \
+            .
+          then
+            echo "Possible live Bitcoin Core rpcauth hash detected."
+            exit 1
+          fi
+
+      - name: Test Sparrow RPC setup safety barriers
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          set +e
+          BITCOIN_CLI=/bin/true \
+          SS=/bin/true \
+            scripts/bitcoin-node-sparrow-rpc-setup.sh \
+              --install \
+              --server-ip 192.168.252.3 \
+              --client-ip 192.168.252.1 \
+              --rpcauth-tool /tmp/not-used
+          unconfirmed_status=$?
+
+          BITCOIN_CLI=/bin/true \
+          SS=/bin/true \
+            scripts/bitcoin-node-sparrow-rpc-setup.sh \
+              --install \
+              --confirm-sparrow-rpc \
+              --server-ip 0.0.0.0 \
+              --client-ip 192.168.252.1 \
+              --rpcauth-tool /tmp/not-used
+          wildcard_status=$?
+          set -e
+
+          [[ "$unconfirmed_status" == "1" ]]
+          [[ "$wildcard_status" == "1" ]]
+
+          grep -q 'Never prints the generated RPC password' \
+            scripts/bitcoin-node-sparrow-rpc-setup.sh
+
+          grep -Fq 'rpcallowip=${CLIENT_IP}/32' \
+            scripts/bitcoin-node-sparrow-rpc-setup.sh
+
+          if grep -q 'rpcbind=0.0.0.0' \
+            scripts/bitcoin-node-sparrow-rpc-setup.sh
+          then
+            echo "Unsafe wildcard RPC bind detected in setup script."
+            exit 1
+          fi
+
       - name: Reject trailing whitespace
         shell: bash
         run: |
