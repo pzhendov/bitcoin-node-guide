@@ -13,6 +13,7 @@ This directory contains focused operational guides:
 - [Safe backup retention](backup-retention.md) — checksum-verified inventory, two-backup protection, dry-run decisions and explicitly confirmed deletion
 - [Backup freshness monitoring](backup-freshness-monitor.md) — daily read-only checks for backup completeness, age, free space and external-copy status with macOS state-change notifications
 - [Deep backup integrity](backup-deep-integrity.md) — monthly SHA-256 and Zstandard verification with protected receipts and state-change notifications
+- [External backup replication](backup-external-replication.md) — safe manual replication through partial files with local and external SHA-256 verification and no overwrites
 
 ## Security
 
