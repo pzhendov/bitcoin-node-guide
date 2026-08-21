@@ -1729,6 +1729,10 @@ Successful checks create protected verification receipts. The optional external 
 
 See [docs/backup-deep-integrity.md](docs/backup-deep-integrity.md) for installation, verification scope, receipts, scheduling, notifications, resource requirements and troubleshooting.
 
+The project also includes safe manual replication of the newest complete local backup to a removable external drive. It verifies the local checksum, transfers through `.partial` files, recalculates SHA-256 from the external copy and never overwrites or deletes an existing backup.
+
+See [docs/backup-external-replication.md](docs/backup-external-replication.md) for the safety model, dry-run, confirmed execution, independent verification, failure handling and tested evidence.
+
 ---
 
 # Automated health monitoring
@@ -1794,6 +1798,7 @@ bitcoin-node-guide/
 │   ├── alerting.md
 │   ├── backup-automation.md
 │   ├── backup-deep-integrity.md
+│   ├── backup-external-replication.md
 │   ├── backup-freshness-monitor.md
 │   ├── backup-retention.md
 │   ├── blockchain-backup-restore.md
@@ -1813,6 +1818,7 @@ bitcoin-node-guide/
 │   ├── macos-bitcoin-node-backup-deep-audit.sh
 │   ├── macos-bitcoin-node-backup-deep-notify.sh
 │   ├── macos-bitcoin-node-backup-notify.sh
+│   ├── macos-bitcoin-node-backup-replicate.sh
 │   ├── macos-bitcoin-node-backup-retention.sh
 │   ├── macos-bitcoin-node-backup.sh
 │   └── macos-bitcoin-node-notify.sh

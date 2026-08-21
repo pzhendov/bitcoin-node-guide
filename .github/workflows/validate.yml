@@ -165,6 +165,7 @@ jobs:
           bash -n scripts/macos-bitcoin-node-backup-deep-audit.sh
           bash -n scripts/macos-bitcoin-node-backup-deep-notify.sh
           bash -n scripts/macos-bitcoin-node-backup-notify.sh
+          bash -n scripts/macos-bitcoin-node-backup-replicate.sh
           bash -n scripts/macos-bitcoin-node-backup-retention.sh
           bash -n scripts/macos-bitcoin-node-backup.sh
           bash -n scripts/macos-bitcoin-node-notify.sh
@@ -314,6 +315,141 @@ jobs:
 
           [[ "$unconfirmed_status" == "1" ]]
           [[ "$unsafe_keep_status" == "1" ]]
+
+      - name: Test external backup replication safety
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          replication_root="$(
+            mktemp -d "${TMPDIR:-/tmp}/bitcoin-replication-ci.XXXXXX"
+          )"
+
+          local_directory="${replication_root}/local"
+          external_directory="${replication_root}/external"
+
+          mkdir -p "$local_directory" "$external_directory"
+
+          cleanup() {
+            rm -rf -- "$replication_root"
+          }
+
+          trap cleanup EXIT
+
+          create_fixture() {
+            local block_height="$1"
+            local backup_date="$2"
+            local backup_stem="bitcoin-node-pruned-${block_height}-${backup_date}"
+            local archive_path="${local_directory}/${backup_stem}.tar.zst"
+            local archive_sha
+
+            printf 'replication fixture for block %s\n' "$block_height" \
+              > "$archive_path"
+
+            archive_sha="$(
+              shasum -a 256 "$archive_path" |
+                awk '{ print $1 }'
+            )"
+
+            printf '%s  %s\n' \
+              "$archive_sha" \
+              "${backup_stem}.tar.zst" \
+              > "${archive_path}.sha256"
+
+            printf 'block=%s\ndate=%s\n' \
+              "$block_height" \
+              "$backup_date" \
+              > "${local_directory}/${backup_stem}.manifest.txt"
+          }
+
+          create_fixture 100 2026-08-01
+          create_fixture 200 2026-08-02
+
+          dry_run_output="$(
+            REPLICATION_ALLOW_NON_VOLUME_DESTINATION=true \
+              scripts/macos-bitcoin-node-backup-replicate.sh \
+              --dry-run \
+              --source "$local_directory" \
+              --destination "$external_directory"
+          )"
+
+          printf '%s\n' "$dry_run_output"
+          grep -q 'Newest local backup verified: block=200' \
+            <<< "$dry_run_output"
+          grep -q 'Dry-run completed; no files were created or modified' \
+            <<< "$dry_run_output"
+          [[ "$(find "$external_directory" -type f | wc -l | tr -d ' ')" == "0" ]]
+
+          set +e
+          REPLICATION_ALLOW_NON_VOLUME_DESTINATION=true \
+            scripts/macos-bitcoin-node-backup-replicate.sh \
+            --execute \
+            --source "$local_directory" \
+            --destination "$external_directory"
+          unconfirmed_status=$?
+          set -e
+
+          [[ "$unconfirmed_status" == "1" ]]
+
+          execute_output="$(
+            REPLICATION_ALLOW_NON_VOLUME_DESTINATION=true \
+              scripts/macos-bitcoin-node-backup-replicate.sh \
+              --execute \
+              --confirm-external-replication \
+              --source "$local_directory" \
+              --destination "$external_directory"
+          )"
+
+          printf '%s\n' "$execute_output"
+          grep -q 'External replication completed successfully' \
+            <<< "$execute_output"
+
+          newest_stem="bitcoin-node-pruned-200-2026-08-02"
+
+          for expected_path in \
+            "${external_directory}/${newest_stem}.tar.zst" \
+            "${external_directory}/${newest_stem}.tar.zst.sha256" \
+            "${external_directory}/${newest_stem}.manifest.txt"
+          do
+            [[ -f "$expected_path" ]]
+          done
+
+          [[ "$(find "$external_directory" -type f -name '*.partial' | wc -l | tr -d ' ')" == "0" ]]
+
+          repeat_output="$(
+            REPLICATION_ALLOW_NON_VOLUME_DESTINATION=true \
+              scripts/macos-bitcoin-node-backup-replicate.sh \
+              --execute \
+              --confirm-external-replication \
+              --source "$local_directory" \
+              --destination "$external_directory"
+          )"
+
+          printf '%s\n' "$repeat_output"
+          grep -q 'External backup is already synchronized and verified' \
+            <<< "$repeat_output"
+
+          partial_directory="${replication_root}/partial"
+          mkdir -p "$partial_directory"
+          touch "${partial_directory}/${newest_stem}.tar.zst.partial"
+
+          set +e
+          partial_output="$(
+            REPLICATION_ALLOW_NON_VOLUME_DESTINATION=true \
+              scripts/macos-bitcoin-node-backup-replicate.sh \
+              --dry-run \
+              --source "$local_directory" \
+              --destination "$partial_directory" \
+              2>&1
+          )"
+          partial_status=$?
+          set -e
+
+          printf '%s\n' "$partial_output"
+          [[ "$partial_status" == "2" ]]
+          grep -q 'Incomplete external artifacts require manual inspection' \
+            <<< "$partial_output"
+          [[ -f "${partial_directory}/${newest_stem}.tar.zst.partial" ]]
 
       - name: Test deep backup integrity audit
         shell: bash
